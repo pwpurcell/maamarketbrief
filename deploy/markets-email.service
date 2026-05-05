@@ -1,0 +1,21 @@
+[Unit]
+Description=Mountain Ash Advisory Energy Brief — daily email send
+After=network-online.target markets-brief.service
+Wants=network-online.target
+# Don't fail the timer if a one-off run errors; the next 06:30 will retry.
+
+[Service]
+Type=oneshot
+User=markets-brief
+Group=markets-brief
+WorkingDirectory=/opt/markets-brief
+EnvironmentFile=/opt/markets-brief/.env
+ExecStart=/opt/markets-brief/.venv/bin/python -m app.email_sender
+StandardOutput=journal
+StandardError=journal
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadOnlyPaths=/opt/markets-brief
+ProtectHome=true

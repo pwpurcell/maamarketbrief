@@ -1,0 +1,13 @@
+[Unit]
+Description=Trigger Mountain Ash Advisory Energy Brief email at 06:30 Australia/Melbourne
+Requires=markets-email.service
+
+[Timer]
+# 06:30 Australia/Melbourne every day. systemd handles DST transitions.
+OnCalendar=*-*-* 06:30:00 Australia/Melbourne
+# If the VPS was offline at 06:30 (reboot, network outage), fire as soon as it's back.
+Persistent=true
+Unit=markets-email.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,21 @@
+# Default: detect text vs binary, normalise EOL on commit.
+* text=auto
+
+# Files that MUST be LF on disk so they work on the Linux VPS even if cloned
+# from a Windows machine. systemd refuses CRLF in unit files; shell scripts
+# break on a CRLF shebang.
+*.sh         text eol=lf
+*.service    text eol=lf
+*.timer      text eol=lf
+Caddyfile    text eol=lf
+
+# Binary assets — never EOL-convert.
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.zip       binary
+*.xlsx      binary
+*.xls       binary
+*.parquet   binary
+*.db        binary
+*.ico       binary

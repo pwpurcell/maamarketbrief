@@ -1,0 +1,193 @@
+#!/usr/bin/env bash
+# Mountain Ash Advisory Energy Brief — one-shot deploy on a fresh Ubuntu 24.04 VPS.
+#
+# Usage (as root or via sudo):
+#
+#   curl -fsSL https://raw.githubusercontent.com/<USER>/markets-brief/main/deploy/deploy.sh \
+#     | sudo bash -s -- \
+#       REPO_URL=https://github.com/<USER>/markets-brief.git \
+#       DOMAIN=brief.example.com
+#
+# Or run after SCP'ing locally:
+#
+#   sudo REPO_URL=... DOMAIN=... bash deploy/deploy.sh
+#
+# Args (positional KEY=VALUE pairs OR environment variables):
+#   REPO_URL  required, https/ssh git URL of the markets-brief repo
+#   DOMAIN    required, fully-qualified domain name pointing at this VPS
+#
+# Prompts at the end for the .env secrets (Resend API key, etc.). Idempotent —
+# re-running updates the code, re-installs systemd units, and restarts services
+# without losing the SQLite cache or DUID registry.
+
+set -euo pipefail
+
+# --- Parse KEY=VALUE pairs from positional args -------------------------------
+for arg in "$@"; do
+    case "$arg" in
+        REPO_URL=*) REPO_URL="${arg#REPO_URL=}" ;;
+        DOMAIN=*)   DOMAIN="${arg#DOMAIN=}" ;;
+        *) echo "Unknown arg: $arg" >&2; exit 1 ;;
+    esac
+done
+
+REPO_URL="${REPO_URL:-}"
+DOMAIN="${DOMAIN:-}"
+
+if [[ -z "$REPO_URL" ]] || [[ -z "$DOMAIN" ]]; then
+    echo "Both REPO_URL and DOMAIN are required."
+    echo "Example:"
+    echo "  sudo bash deploy.sh \\"
+    echo "    REPO_URL=https://github.com/yourname/markets-brief.git \\"
+    echo "    DOMAIN=brief.yourdomain.com"
+    exit 1
+fi
+
+if [[ "$EUID" -ne 0 ]]; then
+    echo "deploy.sh must run as root (try: sudo bash $0 ...)"
+    exit 1
+fi
+
+INSTALL_DIR=/opt/markets-brief
+SERVICE_USER=markets-brief
+
+echo
+echo "==> Mountain Ash Advisory Energy Brief deploy"
+echo "    domain   : $DOMAIN"
+echo "    repo     : $REPO_URL"
+echo "    install  : $INSTALL_DIR"
+echo "    service  : $SERVICE_USER"
+echo
+
+# --- 1. apt + system deps -----------------------------------------------------
+echo "==> Installing system packages"
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq
+apt-get install -y -qq \
+    python3.12 python3.12-venv python3.12-dev \
+    git curl ca-certificates debian-keyring debian-archive-keyring apt-transport-https
+
+# --- 2. Caddy (official APT repo) --------------------------------------------
+if ! command -v caddy >/dev/null 2>&1; then
+    echo "==> Installing Caddy from the official repo"
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+        | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+        > /etc/apt/sources.list.d/caddy-stable.list
+    apt-get update -qq
+    apt-get install -y -qq caddy
+fi
+
+# --- 3. Service user ----------------------------------------------------------
+if ! id "$SERVICE_USER" &>/dev/null; then
+    echo "==> Creating system user $SERVICE_USER"
+    useradd --system --home "$INSTALL_DIR" --shell /usr/sbin/nologin "$SERVICE_USER"
+fi
+
+# --- 4. Clone or update the repo ---------------------------------------------
+if [[ -d "$INSTALL_DIR/.git" ]]; then
+    echo "==> Updating existing checkout at $INSTALL_DIR"
+    sudo -u "$SERVICE_USER" git -C "$INSTALL_DIR" fetch origin
+    sudo -u "$SERVICE_USER" git -C "$INSTALL_DIR" reset --hard origin/main
+else
+    echo "==> Cloning $REPO_URL into $INSTALL_DIR"
+    rm -rf "$INSTALL_DIR"
+    git clone "$REPO_URL" "$INSTALL_DIR"
+    chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
+fi
+
+# --- 5. Python venv + install -------------------------------------------------
+if [[ ! -d "$INSTALL_DIR/.venv" ]]; then
+    echo "==> Creating Python venv"
+    sudo -u "$SERVICE_USER" python3.12 -m venv "$INSTALL_DIR/.venv"
+fi
+echo "==> Installing Python dependencies (pip install -e .)"
+sudo -u "$SERVICE_USER" "$INSTALL_DIR/.venv/bin/pip" install --quiet --upgrade pip
+sudo -u "$SERVICE_USER" "$INSTALL_DIR/.venv/bin/pip" install --quiet -e "$INSTALL_DIR"
+
+# Cache + data directories owned by the service user.
+mkdir -p "$INSTALL_DIR/app/data"
+chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/app/data"
+
+# --- 6. .env file -------------------------------------------------------------
+ENV_FILE="$INSTALL_DIR/.env"
+if [[ ! -f "$ENV_FILE" ]]; then
+    echo
+    echo "==> No .env found. Let's set the production secrets."
+    echo "    (Press Enter to skip a value; daily email won't send until all four are set.)"
+    echo
+    read -rp "Resend API key (re_…), or blank to skip email: " RESEND_API_KEY
+    if [[ -n "$RESEND_API_KEY" ]]; then
+        read -rp "From address (must be verified in Resend, e.g. brief@${DOMAIN}): " EMAIL_FROM
+        read -rp "Recipient address (your inbox): " EMAIL_TO
+        ENABLE_DAILY_EMAIL=true
+    else
+        EMAIL_FROM=""
+        EMAIL_TO=""
+        ENABLE_DAILY_EMAIL=false
+    fi
+    cat > "$ENV_FILE" <<EOF
+# Generated by deploy.sh. Edit and \`sudo systemctl restart markets-brief\` to apply.
+RESEND_API_KEY=${RESEND_API_KEY}
+EMAIL_FROM=${EMAIL_FROM}
+EMAIL_TO=${EMAIL_TO}
+ENABLE_DAILY_EMAIL=${ENABLE_DAILY_EMAIL}
+DOMAIN=${DOMAIN}
+TIMEZONE=Australia/Melbourne
+REFRESH_INTERVAL_MINUTES=15
+EOF
+    chown "$SERVICE_USER:$SERVICE_USER" "$ENV_FILE"
+    chmod 600 "$ENV_FILE"
+else
+    echo "==> Existing .env at $ENV_FILE preserved (edit it manually if needed)"
+fi
+
+# --- 7. systemd units ---------------------------------------------------------
+echo "==> Installing systemd units"
+install -m 644 "$INSTALL_DIR/deploy/markets-brief.service" /etc/systemd/system/
+install -m 644 "$INSTALL_DIR/deploy/markets-email.service" /etc/systemd/system/
+install -m 644 "$INSTALL_DIR/deploy/markets-email.timer"   /etc/systemd/system/
+systemctl daemon-reload
+
+systemctl enable --now markets-brief.service
+systemctl enable --now markets-email.timer
+
+# --- 8. Caddy reverse proxy ---------------------------------------------------
+echo "==> Configuring Caddy"
+install -m 644 "$INSTALL_DIR/deploy/Caddyfile" /etc/caddy/Caddyfile
+# Caddy reads {$DOMAIN} from /etc/default/caddy.
+if ! grep -q "^DOMAIN=" /etc/default/caddy 2>/dev/null; then
+    echo "DOMAIN=$DOMAIN" >> /etc/default/caddy
+else
+    sed -i "s|^DOMAIN=.*|DOMAIN=$DOMAIN|" /etc/default/caddy
+fi
+mkdir -p /var/log/caddy
+chown caddy:caddy /var/log/caddy
+systemctl restart caddy
+
+# --- 9. Final smoke test ------------------------------------------------------
+echo
+echo "==> Waiting up to 30 seconds for the dashboard to come up locally"
+for i in $(seq 1 30); do
+    if curl -sf http://127.0.0.1:8000/healthz >/dev/null 2>&1; then
+        echo "    healthz: ok"
+        break
+    fi
+    sleep 1
+done
+
+echo
+echo "==> Deploy complete."
+echo
+echo "    Dashboard      : https://$DOMAIN"
+echo "    Health         : https://$DOMAIN/healthz"
+echo "    Cache status   : https://$DOMAIN/cache/status"
+echo
+echo "    First refresh ticks (gbb, sttm, dwgm, gsh, nem, etc.) take ~30 s to populate"
+echo "    the cache from cold. Tail with:  sudo journalctl -u markets-brief -f"
+echo
+echo "    Email timer    : sudo systemctl list-timers markets-email.timer"
+echo "    Email logs     : sudo journalctl -u markets-email -f"
+echo
+echo "    To update later:  sudo bash $INSTALL_DIR/deploy/update.sh"
+echo

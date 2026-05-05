@@ -1,0 +1,26 @@
+[Unit]
+Description=Mountain Ash Advisory Energy Brief — FastAPI dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=markets-brief
+Group=markets-brief
+WorkingDirectory=/opt/markets-brief
+EnvironmentFile=/opt/markets-brief/.env
+ExecStart=/opt/markets-brief/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Hardening — markets-brief reads public AEMO data and writes to its own data dir.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/markets-brief/app/data
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

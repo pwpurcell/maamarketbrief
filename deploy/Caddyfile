@@ -1,0 +1,31 @@
+# Mountain Ash Advisory Energy Brief — Caddy reverse proxy.
+#
+# Caddy auto-issues + renews a Let's Encrypt cert for {$DOMAIN}.
+# DOMAIN env var is set by deploy.sh in /etc/default/caddy or via systemd override.
+#
+# Tail-test: curl -I https://your-domain — should see HTTP/2 200 from uvicorn.
+
+{$DOMAIN} {
+    reverse_proxy 127.0.0.1:8000
+
+    # Compression for the dashboard's HTML body (~80KB → ~12KB on the wire).
+    encode zstd gzip
+
+    # Sensible browser security defaults.
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "no-referrer-when-downgrade"
+    }
+
+    # Silence the access log on /healthz to keep noise down; keep everything else.
+    @healthcheck path /healthz
+    log @healthcheck {
+        output discard
+    }
+
+    log {
+        output file /var/log/caddy/markets-brief.log
+        format console
+    }
+}

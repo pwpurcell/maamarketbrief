@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mountain Ash Advisory Energy Brief — {{ title_date }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+</head>
+<body>
+<main class="page">
+
+    <header class="topbar">
+        <div class="topbar-meta">
+            <div class="muted">Last refresh: {{ as_of_str }}</div>
+            <a class="btn" href="/">Refresh now</a>
+        </div>
+        <div class="brand">
+            <img class="brand-logo" src="{{ url_for('static', path='maa-logo.png') }}" alt="Mountain Ash Advisory">
+            <h1>The Mountain Ash Advisory Energy Brief</h1>
+            <p class="subtle">{{ title_date }}</p>
+        </div>
+    </header>
+
+    {% if phase_banner %}
+    <div class="banner">{{ phase_banner }}</div>
+    {% endif %}
+
+    <section>
+        <h2>East coast gas — pipeline flows (nominations)</h2>
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Pipeline</th>
+                    <th class="num">Today (TJ/d)</th>
+                    <th class="num">Nameplate</th>
+                    <th class="num">Utilisation</th>
+                    <th class="num">Δ vs yesterday</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in pipelines %}
+                <tr{% if p.stale %} class="stale"{% endif %}>
+                    <td>{{ p.display }}</td>
+                    <td class="num">{% if p.flow is none %}—{% else %}{{ "%.1f"|format(p.flow) }}{% endif %}</td>
+                    <td class="num">{{ p.nameplate }}</td>
+                    <td class="num">{% if p.utilisation is none %}—{% else %}{{ "%.1f"|format(p.utilisation) }}%{% endif %}</td>
+                    <td class="num delta delta-{{ p.delta_class }}">
+                        {% if p.delta_value is none %}—{% else %}{{ p.delta_arrow }} {{ "%+.1f"|format(p.delta_value) }}{% endif %}
+                    </td>
+                    <td class="muted">{{ p.direction }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p class="footnote">Shipper nominations + forecast for today's gas day, as published by AEMO GBB (matches gbb.aemo.com.au "today" view). Updates several times per day. Settled metered flows lag by 1–2 days and aren't shown.</p>
+    </section>
+
+    <section>
+        <h2>Gas prices ($/GJ)</h2>
+        <div class="grid-cards">
+            {% for g in gas_prices %}
+            <div class="card{% if g.stale %} stale{% endif %}">
+                <div class="card-label">{{ g.hub }}</div>
+                <div class="card-value">{% if g.today is none %}—{% else %}${{ "%.2f"|format(g.today) }}{% endif %}</div>
+                <div class="card-sub">7d avg {% if g.avg7 is none %}—{% else %}${{ "%.2f"|format(g.avg7) }}{% endif %}</div>
+                <div class="card-spark">{{ g.sparkline_values | sparkline | safe }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section>
+        <h2>NEM electricity — dispatch RRP ($/MWh)</h2>
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Region</th>
+                    <th class="num">Current RRP</th>
+                    <th class="num">7d avg</th>
+                    <th>Sparkline</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in elec_prices %}
+                <tr{% if e.stale %} class="stale"{% endif %}>
+                    <td>{{ e.region }}</td>
+                    <td class="num">{% if e.rrp is none %}—{% else %}${{ "%.2f"|format(e.rrp) }}{% endif %}</td>
+                    <td class="num">{% if e.avg7 is none %}—{% else %}${{ "%.2f"|format(e.avg7) }}{% endif %}</td>
+                    <td>{{ e.sparkline_values | sparkline | safe }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+    <section>
+        <h2>Interconnector flows{% if interconnectors.as_of %} <span class="muted" style="font-size:12px; text-transform:none; letter-spacing:0">— as at {{ interconnectors.as_of[:16].replace("T"," ") }} AEMO</span>{% endif %}</h2>
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Interconnector</th>
+                    <th>Direction</th>
+                    <th class="num">Flow (MW)</th>
+                    <th class="num">Limit</th>
+                    <th class="num">Utilisation</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in interconnectors.rows %}
+                <tr>
+                    <td>{{ r.display }} <span class="muted" style="font-size:11px">{{ r.kind }}</span></td>
+                    <td class="delta delta-{{ r.arrow_class }}">{{ r.arrow }} {{ r.direction_text }}</td>
+                    <td class="num">{{ "{:.0f}".format(r.mw_flow) }}</td>
+                    <td class="num">{% if r.limit_used %}{{ "{:.0f}".format(r.limit_used) }}{% else %}—{% endif %}</td>
+                    <td class="num{% if r.utilisation and r.utilisation >= 95 %} delta delta-down{% endif %}">{% if r.utilisation is none %}—{% else %}{{ "%.1f"|format(r.utilisation) }}%{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p class="footnote">From AEMO DispatchIS INTERCONNECTORRES table (5-min). Direction sign comes from the published MWFLOW; the binding limit shown is whichever AEMO is currently enforcing (export when flowing positive, import when flowing negative). Util ≥ 95% highlighted as binding.</p>
+    </section>
+
+    <section>
+        <h2>Generation mix — NEM-wide capacity factors{% if genmix_gas_day %} <span class="muted" style="font-size:12px; text-transform:none; letter-spacing:0">— gas day {{ genmix_gas_day }} (most recently published complete day)</span>{% endif %}</h2>
+        <div class="stacked-bar">
+            {% for g in genmix %}
+                {% if g.share_pct > 0 %}
+                <div class="stacked-bar-seg fuel-{{ loop.index }}"
+                     style="width: {{ g.share_pct }}%"
+                     title="{{ g.fuel }}: {{ '%.1f'|format(g.share_pct) }}%">
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Fuel</th>
+                    <th class="num">Capacity factor</th>
+                    <th class="num">MWh today</th>
+                    <th class="num">Installed (MW)</th>
+                    <th class="num">7d avg CF</th>
+                    <th class="num">Δ vs 7d avg</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for g in genmix %}
+                <tr{% if g.stale %} class="stale"{% endif %}>
+                    <td>
+                        {{ g.fuel }}
+                        {% if g.throughput_mwh is defined %}
+                            <span class="muted">· throughput {{ "{:,}".format(g.throughput_mwh) }} MWh</span>
+                        {% endif %}
+                    </td>
+                    <td class="num">{% if g.cf is none %}—{% else %}{{ "%.1f"|format(g.cf) }}%{% endif %}</td>
+                    <td class="num">{{ "{:,}".format(g.mwh) }}</td>
+                    <td class="num">{% if g.installed_mw %}{{ "{:,}".format(g.installed_mw) }}{% else %}—{% endif %}</td>
+                    <td class="num">{% if g.avg7_cf is none %}—{% else %}{{ "%.1f"|format(g.avg7_cf) }}%{% endif %}</td>
+                    <td class="num">{% if g.delta is none %}—{% else %}{{ "%+.1f"|format(g.delta) }} pp{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+    <section>
+        <h2>Western Australia gas{% if wa.as_of_gas_day %} <span class="muted" style="font-size:12px; text-transform:none; letter-spacing:0">— gas day {{ wa.as_of_gas_day }}</span>{% endif %}</h2>
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Pipeline / facility</th>
+                    <th class="num">Flow / output (TJ/d)</th>
+                    <th class="num">Nameplate</th>
+                    <th class="num">Utilisation</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr{% if wa.stale %} class="stale"{% endif %}>
+                    <td><strong>Dampier to Bunbury (DBP)</strong></td>
+                    <td class="num">{% if wa.dbp_flow is none %}—{% else %}{{ "%.1f"|format(wa.dbp_flow) }}{% endif %}</td>
+                    <td class="num">{{ wa.dbp_nameplate }}</td>
+                    <td class="num">{% if wa.dbp_utilisation is none %}—{% else %}{{ "%.1f"|format(wa.dbp_utilisation) }}%{% endif %}</td>
+                </tr>
+                {% for f in wa.facilities %}
+                <tr{% if f.stale %} class="stale"{% endif %}>
+                    <td>{{ f.name }}</td>
+                    <td class="num">{{ "%.1f"|format(f.output_tjd) }}</td>
+                    <td class="num muted">—</td>
+                    <td class="num muted">—</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p class="footnote">WA GBB API publishes settled actuals; the data above lags by ~2 days. Indicative WA domgas reference price not yet wired.</p>
+    </section>
+
+    {% if phase3_ui_banner %}
+    <div class="banner banner--info">{{ phase3_ui_banner }}</div>
+    {% endif %}
+
+    <section>
+        <h2>Storage and balance</h2>
+
+        <h3 class="subhead">Gas storage <span class="muted" style="font-size:11px; text-transform:none; letter-spacing:0">— source: AEMO GBB ActualFlowStorage (settled, ~1-2 day lag)</span></h3>
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Facility</th>
+                    <th class="num">Inventory (PJ)</th>
+                    <th class="num">Working capacity</th>
+                    <th class="num">% full</th>
+                    <th class="num">Net flow (TJ/d)</th>
+                    <th class="num">Days of cover</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in storage.gas_storage %}
+                <tr{% if s.stale %} class="stale"{% endif %}>
+                    <td>{{ s.facility }}</td>
+                    <td class="num">{% if s.inventory_pj is none %}—{% else %}{{ "%.1f"|format(s.inventory_pj) }}{% endif %}</td>
+                    <td class="num">{% if s.capacity_pj is none %}—{% else %}{{ "%.1f"|format(s.capacity_pj) }}{% endif %}</td>
+                    <td class="num">{% if s.pct_full is none %}—{% else %}{{ "%.1f"|format(s.pct_full) }}%{% endif %}</td>
+                    <td class="num delta delta-{{ s.net_flow_class }}">
+                        {% if s.net_flow_tjd is none %}—{% else %}{{ s.net_flow_arrow }} {{ "%+.1f"|format(s.net_flow_tjd) }}{% endif %}
+                    </td>
+                    <td class="num">{% if s.days_cover is none %}—{% else %}{{ "%.1f"|format(s.days_cover) }}{% endif %}</td>
+                    <td class="muted">{{ s.region }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p class="footnote">Net flow positive = injection, negative = withdrawal. Days of cover = <strong>(inventory − cushion gas) ÷ max withdrawal rate</strong> at operator nameplate peak — the planning-relevant figure for stress events, not current flow. Cushion gas is the minimum physically immobile inventory below which withdrawal stops; Iona's ~6 PJ floor is per the 2023 GSOO (so working gas at full = 18.5 PJ, not 24.5). Other facilities aren't published in the same detail; their cushion is treated as 0 (working = full inventory) until firmer data arrives.</p>
+
+        <h3 class="subhead">Demand forecast <span class="muted" style="font-size:11px; text-transform:none; letter-spacing:0">— actual-vs-forecast comparison pending (DWGM int310 / STTM int657)</span></h3>
+        <div class="grid-cards grid-cards--two">
+            {% for d in storage.demand %}
+            <div class="card{% if d.stale %} stale{% endif %}">
+                <div class="card-label">{{ d.market }}</div>
+                <div class="card-value">
+                    {% if d.forecast is none %}—{% else %}{{ "{:,}".format(d.forecast) }} {{ d.unit }}{% endif %}
+                </div>
+                <div class="card-sub">
+                    {% if d.actual is not none %}Actual {{ "{:,}".format(d.actual) }} {{ d.unit }}{% else %}Actual: not yet published{% endif %}
+                </div>
+                <div class="card-sub" style="margin-top:4px">{{ d.context or "" }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section>
+        <h2>Forward curves <span class="muted" style="font-size:12px; text-transform:none; letter-spacing:0">— source: asxenergy.com.au public dataset (delayed ~20 min){% if forwards.as_of_time %}, {{ forwards.as_of_time }}{% endif %}</span></h2>
+        <p class="footnote" style="margin-bottom:12px">Click a row to expand its full curve. Settlement prices via asxenergy.com.au's public futures dataset, delayed ~20 minutes. Personal/internal use only — do not redistribute.</p>
+
+        <h3 class="subhead">Gas futures ($/GJ)</h3>
+        {% for section in forwards.gas_sections %}
+        <details class="curve">
+            <summary>
+                <span class="curve-title">{{ section.section }}</span>
+                <span class="curve-meta">{{ section.rows|length }} contract{{ section.rows|length != 1 and "s" or "" }}{% if section.rows and section.rows[0].settle and section.rows[0].settle != "-" %} · nearest {{ section.rows[0].label }} {{ section.rows[0].settle }}{% endif %}</span>
+            </summary>
+            <table class="data curve-table">
+                <thead>
+                    <tr>
+                        <th>Contract</th>
+                        <th class="num">Last</th>
+                        <th class="num">Settle</th>
+                        <th class="num">Δ</th>
+                        <th class="num">Vol</th>
+                        <th class="num">Open Int</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in section.rows %}
+                    <tr>
+                        <td>{{ r.label }} <span class="muted" style="font-size:11px">{{ r.code }}</span></td>
+                        <td class="num">{{ r.last or "—" }}</td>
+                        <td class="num">{{ r.settle or "—" }}</td>
+                        <td class="num">{{ r["+/-"] or "—" }}</td>
+                        <td class="num">{{ r.vol or "—" }}</td>
+                        <td class="num">{{ r.openint or "—" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </details>
+        {% endfor %}
+
+        <h3 class="subhead">Electricity futures ($/MWh) <span class="muted" style="font-size:11px; text-transform:none; letter-spacing:0">— Base Quarter + Base Strip only (Caps and Peaks available in cache)</span></h3>
+        {% for section in forwards.elec_sections %}
+        <details class="curve">
+            <summary>
+                <span class="curve-title">{{ section.section }}</span>
+                <span class="curve-meta">{{ section.rows|length }} contract{{ section.rows|length != 1 and "s" or "" }}{% if section.rows and section.rows[0].settle and section.rows[0].settle != "-" %} · nearest {{ section.rows[0].label }} {{ section.rows[0].settle }}{% endif %}</span>
+            </summary>
+            <table class="data curve-table">
+                <thead>
+                    <tr>
+                        <th>Contract</th>
+                        <th class="num">Last</th>
+                        <th class="num">Settle</th>
+                        <th class="num">Δ</th>
+                        <th class="num">Vol</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in section.rows %}
+                    <tr>
+                        <td>{{ r.label }} <span class="muted" style="font-size:11px">{{ r.code }}</span></td>
+                        <td class="num">{{ r.last or "—" }}</td>
+                        <td class="num">{{ r.settle or "—" }}</td>
+                        <td class="num">{{ r["+/-"] or "—" }}</td>
+                        <td class="num">{{ r.vol or "—" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </details>
+        {% endfor %}
+    </section>
+
+    <section>
+        <h2>LNG netback and export parity</h2>
+
+        <h3 class="subhead">Global reference prices</h3>
+        <div class="grid-cards">
+            {% for g in netback.global_lng %}
+            <div class="card{% if g.stale %} stale{% endif %}">
+                <div class="card-label">{{ g.series }}</div>
+                <div class="card-value">
+                    {% if g.value_main is none %}—{% else %}{{ "%.2f"|format(g.value_main) }}{% endif %}
+                    <span class="card-unit">{{ g.unit_main }}</span>
+                </div>
+                {% if g.value_alt is not none %}
+                <div class="card-sub">≈ {{ "%.2f"|format(g.value_alt) }} {{ g.unit_alt }}</div>
+                {% else %}
+                <div class="card-sub">{{ g.context or "" }}</div>
+                {% endif %}
+                <div class="card-delta delta-{{ g.delta_class }}">
+                    {% if g.delta is not none %}{{ g.delta_arrow }} {{ "%+.2f"|format(g.delta) }}{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <h3 class="subhead">Netback comparison ($/GJ)</h3>
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Series</th>
+                    <th class="num">Current</th>
+                    <th class="num">7d avg</th>
+                    <th class="num">30d avg</th>
+                    <th class="num">Spread to STTM Sydney</th>
+                    <th class="num">Spread to Wallumbilla GSH</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for n in netback.netback %}
+                <tr{% if n.stale %} class="stale"{% endif %}>
+                    <td>{{ n.series }}</td>
+                    <td class="num">{% if n.current is none %}—{% else %}${{ "%.2f"|format(n.current) }}{% endif %}</td>
+                    <td class="num">{% if n.avg7 is none %}—{% else %}${{ "%.2f"|format(n.avg7) }}{% endif %}</td>
+                    <td class="num">{% if n.avg30 is none %}—{% else %}${{ "%.2f"|format(n.avg30) }}{% endif %}</td>
+                    <td class="num">{% if n.spread_sttm_syd is none %}—{% else %}{{ "%+.2f"|format(n.spread_sttm_syd) }}{% endif %}</td>
+                    <td class="num">{% if n.spread_wallum is none %}—{% else %}{{ "%+.2f"|format(n.spread_wallum) }}{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p class="footnote">{{ netback.footnote }}</p>
+    </section>
+
+    <section>
+        <h2>Macro context</h2>
+
+        <h3 class="subhead">FX and rates</h3>
+        <div class="grid-cards">
+            {% for r in macro.fx_rates %}
+            <div class="card{% if r.value_text == '—' %} stale{% endif %}">
+                <div class="card-label">{{ r.label }}</div>
+                <div class="card-value">{{ r.value_text }}</div>
+                <div class="card-delta delta-{{ r.tone_class }}">{{ r.delta_text }}</div>
+                <div class="card-sub">{{ r.context }}</div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <h3 class="subhead">Energy equities (ASX-listed, alphabetical) <span class="muted" style="font-size:11px; text-transform:none; letter-spacing:0">— source: asx.com.au backend (Markit Digital)</span></h3>
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Ticker</th>
+                    <th>Company</th>
+                    <th>Segment</th>
+                    <th class="num">Last ($)</th>
+                    <th class="num">Δ today (%)</th>
+                    <th class="num">Market cap ($bn)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in macro.equities %}
+                <tr{% if e.stale %} class="stale"{% endif %}>
+                    <td><strong>{{ e.ticker }}</strong></td>
+                    <td>{{ e.company }}</td>
+                    <td class="muted">{{ e.segment }}</td>
+                    <td class="num">{% if e.last is none %}—{% else %}{{ "%.2f"|format(e.last) }}{% endif %}</td>
+                    <td class="num{% if e.delta_today_pct is not none %} delta delta-{% if e.delta_today_pct > 0 %}up{% elif e.delta_today_pct < 0 %}down{% else %}flat{% endif %}{% endif %}">
+                        {% if e.delta_today_pct is none %}—{% else %}{{ "%+.2f"|format(e.delta_today_pct) }}%{% endif %}
+                    </td>
+                    <td class="num">{% if e.mcap_bn is none %}—{% else %}{{ "%.1f"|format(e.mcap_bn) }}{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+    <footer>
+        <p class="muted">
+            Sources: AEMO NEMWeb (GBB, STTM, DWGM, GSH, DispatchIS, Next_Day_Dispatch, ROOFTOP_PV),
+            AEMO NEM Registration List, AEMO WA GBB, AEMO MIBB,
+            ASX 24, ACCC LNG Netback Series, ASX equity feed, RBA, AOFM.
+        </p>
+        <p class="muted">Next refresh in {{ next_refresh_min }} minutes.</p>
+    </footer>
+
+</main>
+</body>
+</html>

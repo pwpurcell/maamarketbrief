@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mountain Ash Advisory Energy Brief — {{ title_date }}</title>
+</head>
+<body style="margin:0; padding:0; background:#f4f5f7; font-family:Helvetica,Arial,sans-serif; color:#1a1a1a;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f5f7;">
+<tr><td align="center" style="padding:20px 10px;">
+<table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff; max-width:640px; width:100%;">
+
+<!-- Header -->
+<tr><td align="center" style="padding:24px 24px 16px; border-bottom:2px solid #1F3864; text-align:center;">
+  {% if logo_b64 %}
+  <img src="data:image/png;base64,{{ logo_b64 }}" alt="Mountain Ash Advisory" width="140" style="max-width:140px; height:auto; display:block; margin:0 auto 8px;">
+  {% endif %}
+  <h1 style="margin:6px 0 0; color:#1F3864; font-size:22px; letter-spacing:-0.01em;">The Mountain Ash Advisory Energy Brief</h1>
+  <div style="margin:4px 0 0; color:#6b7280; font-size:13px;">{{ title_date }} &middot; as at {{ as_of_str }}</div>
+</td></tr>
+
+<!-- Banner -->
+{% if phase_banner %}
+<tr><td style="padding:12px 24px; background:#eff6ff; color:#1e3a8a; font-size:12px;">
+  {{ phase_banner }}
+</td></tr>
+{% endif %}
+
+<!-- East coast gas pipelines -->
+<tr><td style="padding:18px 24px 6px;">
+  <h2 style="margin:0 0 8px; color:#1F3864; font-size:13px; text-transform:uppercase; letter-spacing:0.05em;">East coast gas — pipeline flows (nominations)</h2>
+  <table role="presentation" width="100%" cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse; font-size:13px;">
+    <thead><tr style="background:#f8f9fb; color:#6b7280; text-transform:uppercase; font-size:11px;">
+      <th align="left" style="border-bottom:1px solid #e5e7eb;">Pipeline</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">TJ/d</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Nameplate</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Util</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Δ vs yesterday</th>
+    </tr></thead>
+    <tbody>
+    {% for p in pipelines %}
+    <tr>
+      <td style="border-bottom:1px solid #e5e7eb;">{{ p.display }}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{% if p.flow is none %}—{% else %}{{ "%.1f"|format(p.flow) }}{% endif %}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{{ p.nameplate }}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{% if p.utilisation is none %}—{% else %}{{ "%.1f"|format(p.utilisation) }}%{% endif %}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb; color:{% if p.delta_class == 'up' %}#15803d{% elif p.delta_class == 'down' %}#b91c1c{% else %}#6b7280{% endif %};">
+        {% if p.delta_value is none %}—{% else %}{{ p.delta_arrow }} {{ "%+.1f"|format(p.delta_value) }}{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</td></tr>
+
+<!-- Gas prices -->
+<tr><td style="padding:18px 24px 6px;">
+  <h2 style="margin:0 0 8px; color:#1F3864; font-size:13px; text-transform:uppercase; letter-spacing:0.05em;">Gas prices ($/GJ)</h2>
+  <table role="presentation" width="100%" cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse; font-size:13px;">
+    <thead><tr style="background:#f8f9fb; color:#6b7280; text-transform:uppercase; font-size:11px;">
+      <th align="left" style="border-bottom:1px solid #e5e7eb;">Hub</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Today</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">7d avg</th>
+    </tr></thead>
+    <tbody>
+    {% for g in gas_prices %}
+    <tr>
+      <td style="border-bottom:1px solid #e5e7eb;">{{ g.hub }}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{% if g.today is none %}—{% else %}${{ "%.2f"|format(g.today) }}{% endif %}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{% if g.avg7 is none %}—{% else %}${{ "%.2f"|format(g.avg7) }}{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</td></tr>
+
+<!-- NEM dispatch -->
+<tr><td style="padding:18px 24px 6px;">
+  <h2 style="margin:0 0 8px; color:#1F3864; font-size:13px; text-transform:uppercase; letter-spacing:0.05em;">NEM electricity — dispatch RRP ($/MWh)</h2>
+  <table role="presentation" width="100%" cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse; font-size:13px;">
+    <thead><tr style="background:#f8f9fb; color:#6b7280; text-transform:uppercase; font-size:11px;">
+      <th align="left" style="border-bottom:1px solid #e5e7eb;">Region</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Current</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">7d avg</th>
+    </tr></thead>
+    <tbody>
+    {% for e in elec_prices %}
+    <tr>
+      <td style="border-bottom:1px solid #e5e7eb;">{{ e.region }}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{% if e.rrp is none %}—{% else %}${{ "%.2f"|format(e.rrp) }}{% endif %}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{% if e.avg7 is none %}—{% else %}${{ "%.2f"|format(e.avg7) }}{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</td></tr>
+
+<!-- Interconnector flows -->
+<tr><td style="padding:18px 24px 6px;">
+  <h2 style="margin:0 0 8px; color:#1F3864; font-size:13px; text-transform:uppercase; letter-spacing:0.05em;">Interconnector flows</h2>
+  <table role="presentation" width="100%" cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse; font-size:13px;">
+    <thead><tr style="background:#f8f9fb; color:#6b7280; text-transform:uppercase; font-size:11px;">
+      <th align="left" style="border-bottom:1px solid #e5e7eb;">Interconnector</th>
+      <th align="left" style="border-bottom:1px solid #e5e7eb;">Direction</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Flow (MW)</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Util</th>
+    </tr></thead>
+    <tbody>
+    {% for r in interconnectors.rows %}
+    <tr>
+      <td style="border-bottom:1px solid #e5e7eb;">{{ r.display }} <span style="color:#6b7280; font-size:11px;">{{ r.kind }}</span></td>
+      <td style="border-bottom:1px solid #e5e7eb; color:{% if r.arrow_class == 'up' %}#15803d{% else %}#b91c1c{% endif %};">{{ r.arrow }} {{ r.direction_text }}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{{ "{:.0f}".format(r.mw_flow) }}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;{% if r.utilisation and r.utilisation >= 95 %} color:#b91c1c; font-weight:600;{% endif %}">{% if r.utilisation is none %}—{% else %}{{ "%.1f"|format(r.utilisation) }}%{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</td></tr>
+
+<!-- Generation mix -->
+<tr><td style="padding:18px 24px 6px;">
+  <h2 style="margin:0 0 8px; color:#1F3864; font-size:13px; text-transform:uppercase; letter-spacing:0.05em;">Generation mix &mdash; NEM-wide{% if genmix_gas_day %}, gas day {{ genmix_gas_day }}{% endif %}</h2>
+  <table role="presentation" width="100%" cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse; font-size:13px;">
+    <thead><tr style="background:#f8f9fb; color:#6b7280; text-transform:uppercase; font-size:11px;">
+      <th align="left" style="border-bottom:1px solid #e5e7eb;">Fuel</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">CF</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">MWh</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Installed</th>
+    </tr></thead>
+    <tbody>
+    {% for g in genmix %}
+    <tr>
+      <td style="border-bottom:1px solid #e5e7eb;">{{ g.fuel }}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{% if g.cf is none %}—{% else %}{{ "%.1f"|format(g.cf) }}%{% endif %}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{{ "{:,}".format(g.mwh) }}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{% if g.installed_mw %}{{ "{:,}".format(g.installed_mw) }}{% else %}—{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</td></tr>
+
+<!-- WA gas -->
+<tr><td style="padding:18px 24px 6px;">
+  <h2 style="margin:0 0 8px; color:#1F3864; font-size:13px; text-transform:uppercase; letter-spacing:0.05em;">Western Australia gas{% if wa.as_of_gas_day %} (gas day {{ wa.as_of_gas_day }}){% endif %}</h2>
+  <table role="presentation" width="100%" cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse; font-size:13px;">
+    <thead><tr style="background:#f8f9fb; color:#6b7280; text-transform:uppercase; font-size:11px;">
+      <th align="left" style="border-bottom:1px solid #e5e7eb;">Pipeline / facility</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">TJ/d</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Nameplate</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Util</th>
+    </tr></thead>
+    <tbody>
+    <tr>
+      <td style="border-bottom:1px solid #e5e7eb;"><strong>Dampier to Bunbury (DBP)</strong></td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{% if wa.dbp_flow is none %}—{% else %}{{ "%.1f"|format(wa.dbp_flow) }}{% endif %}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{{ wa.dbp_nameplate }}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{% if wa.dbp_utilisation is none %}—{% else %}{{ "%.1f"|format(wa.dbp_utilisation) }}%{% endif %}</td>
+    </tr>
+    {% for f in wa.facilities %}
+    <tr>
+      <td style="border-bottom:1px solid #e5e7eb;">{{ f.name }}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{{ "%.1f"|format(f.output_tjd) }}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb; color:#6b7280;">—</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb; color:#6b7280;">—</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</td></tr>
+
+<!-- Storage -->
+<tr><td style="padding:18px 24px 6px;">
+  <h2 style="margin:0 0 8px; color:#1F3864; font-size:13px; text-transform:uppercase; letter-spacing:0.05em;">Gas storage</h2>
+  <table role="presentation" width="100%" cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse; font-size:13px;">
+    <thead><tr style="background:#f8f9fb; color:#6b7280; text-transform:uppercase; font-size:11px;">
+      <th align="left" style="border-bottom:1px solid #e5e7eb;">Facility</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Inv (PJ)</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Capacity</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">% full</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Net flow</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Days @ peak</th>
+    </tr></thead>
+    <tbody>
+    {% for s in storage.gas_storage %}
+    <tr>
+      <td style="border-bottom:1px solid #e5e7eb;">{{ s.facility }}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{% if s.inventory_pj is none %}—{% else %}{{ "%.1f"|format(s.inventory_pj) }}{% endif %}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{% if s.capacity_pj is none %}—{% else %}{{ "%.1f"|format(s.capacity_pj) }}{% endif %}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{% if s.pct_full is none %}—{% else %}{{ "%.1f"|format(s.pct_full) }}%{% endif %}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb; color:{% if s.net_flow_class == 'up' %}#15803d{% elif s.net_flow_class == 'down' %}#b91c1c{% else %}#6b7280{% endif %};">
+        {% if s.net_flow_tjd is none %}—{% else %}{{ s.net_flow_arrow }} {{ "%+.1f"|format(s.net_flow_tjd) }}{% endif %}
+      </td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{% if s.days_cover is none %}—{% else %}{{ "%.1f"|format(s.days_cover) }}{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</td></tr>
+
+<!-- Demand forecast -->
+<tr><td style="padding:18px 24px 6px;">
+  <h2 style="margin:0 0 8px; color:#1F3864; font-size:13px; text-transform:uppercase; letter-spacing:0.05em;">Demand forecast</h2>
+  <table role="presentation" width="100%" cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse; font-size:13px;">
+    {% for d in storage.demand %}
+    <tr>
+      <td style="border-bottom:1px solid #e5e7eb; padding:8px 6px;">
+        <strong>{{ d.market }}</strong>
+        &nbsp;<span style="color:#6b7280;">{{ d.context or "" }}</span>
+        <div style="margin-top:4px;">Forecast: {% if d.forecast is none %}—{% else %}{{ "{:,}".format(d.forecast) }} {{ d.unit }}{% endif %}{% if d.actual is not none %} &middot; Actual: {{ "{:,}".format(d.actual) }} {{ d.unit }}{% endif %}</div>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</td></tr>
+
+<!-- Forward curves -->
+<tr><td style="padding:18px 24px 6px;">
+  <h2 style="margin:0 0 8px; color:#1F3864; font-size:13px; text-transform:uppercase; letter-spacing:0.05em;">Forward curves{% if forwards.as_of_time %} <span style="font-weight:normal; text-transform:none; letter-spacing:0; color:#6b7280; font-size:11px;">— {{ forwards.as_of_time }}</span>{% endif %}</h2>
+
+  {% for section in forwards.gas_sections %}
+  <div style="margin:10px 0 4px; font-size:11px; text-transform:uppercase; color:#6b7280; font-weight:600;">{{ section.section }} ($/GJ)</div>
+  <table role="presentation" width="100%" cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse; font-size:12px;">
+    <thead><tr style="background:#f8f9fb; color:#6b7280; font-size:10px;">
+      <th align="left" style="border-bottom:1px solid #e5e7eb;">Contract</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Settle</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Vol</th>
+    </tr></thead>
+    <tbody>
+    {% for r in section.rows[:8] %}
+    <tr>
+      <td style="border-bottom:1px solid #e5e7eb;">{{ r.label }}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{{ r.settle or "—" }}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{{ r.vol or "—" }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endfor %}
+
+  {% for section in forwards.elec_sections %}
+  <div style="margin:10px 0 4px; font-size:11px; text-transform:uppercase; color:#6b7280; font-weight:600;">{{ section.section }} ($/MWh)</div>
+  <table role="presentation" width="100%" cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse; font-size:12px;">
+    <thead><tr style="background:#f8f9fb; color:#6b7280; font-size:10px;">
+      <th align="left" style="border-bottom:1px solid #e5e7eb;">Contract</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Settle</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Vol</th>
+    </tr></thead>
+    <tbody>
+    {% for r in section.rows %}
+    <tr>
+      <td style="border-bottom:1px solid #e5e7eb;">{{ r.label }}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{{ r.settle or "—" }}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{{ r.vol or "—" }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endfor %}
+</td></tr>
+
+<!-- LNG netback -->
+<tr><td style="padding:18px 24px 6px;">
+  <h2 style="margin:0 0 8px; color:#1F3864; font-size:13px; text-transform:uppercase; letter-spacing:0.05em;">LNG netback &amp; export parity</h2>
+
+  <table role="presentation" width="100%" cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse; font-size:13px;">
+    <thead><tr style="background:#f8f9fb; color:#6b7280; text-transform:uppercase; font-size:11px;">
+      <th align="left" style="border-bottom:1px solid #e5e7eb;">Reference</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Value</th>
+      <th align="left" style="border-bottom:1px solid #e5e7eb;">Source</th>
+    </tr></thead>
+    <tbody>
+    {% for g in netback.global_lng %}
+    <tr>
+      <td style="border-bottom:1px solid #e5e7eb;">{{ g.series }}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{% if g.value_main is none %}—{% else %}{{ "%.2f"|format(g.value_main) }} {{ g.unit_main }}{% endif %}</td>
+      <td style="border-bottom:1px solid #e5e7eb; color:#6b7280; font-size:11px;">{{ g.context or "" }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <div style="margin:10px 0 4px; font-size:11px; text-transform:uppercase; color:#6b7280; font-weight:600;">Netback comparison ($/GJ)</div>
+  <table role="presentation" width="100%" cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse; font-size:13px;">
+    <thead><tr style="background:#f8f9fb; color:#6b7280; text-transform:uppercase; font-size:11px;">
+      <th align="left" style="border-bottom:1px solid #e5e7eb;">Series</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Current</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Spread to GSH</th>
+    </tr></thead>
+    <tbody>
+    {% for n in netback.netback %}
+    <tr>
+      <td style="border-bottom:1px solid #e5e7eb;">{{ n.series }}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{% if n.current is none %}—{% else %}${{ "%.2f"|format(n.current) }}{% endif %}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{% if n.spread_wallum is none %}—{% else %}{{ "%+.2f"|format(n.spread_wallum) }}{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</td></tr>
+
+<!-- Macro -->
+<tr><td style="padding:18px 24px 6px;">
+  <h2 style="margin:0 0 8px; color:#1F3864; font-size:13px; text-transform:uppercase; letter-spacing:0.05em;">Macro context</h2>
+
+  <table role="presentation" width="100%" cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse; font-size:13px;">
+    <thead><tr style="background:#f8f9fb; color:#6b7280; text-transform:uppercase; font-size:11px;">
+      <th align="left" style="border-bottom:1px solid #e5e7eb;">Indicator</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Value</th>
+      <th align="left" style="border-bottom:1px solid #e5e7eb;">Δ / Context</th>
+    </tr></thead>
+    <tbody>
+    {% for r in macro.fx_rates %}
+    <tr>
+      <td style="border-bottom:1px solid #e5e7eb;">{{ r.label }}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{{ r.value_text }}</td>
+      <td style="border-bottom:1px solid #e5e7eb; color:{% if r.tone_class == 'up' %}#15803d{% elif r.tone_class == 'down' %}#b91c1c{% else %}#6b7280{% endif %}; font-size:11px;">
+        {{ r.delta_text or r.context }}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <div style="margin:10px 0 4px; font-size:11px; text-transform:uppercase; color:#6b7280; font-weight:600;">Energy equities (ASX)</div>
+  <table role="presentation" width="100%" cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse; font-size:12px;">
+    <thead><tr style="background:#f8f9fb; color:#6b7280; font-size:10px;">
+      <th align="left" style="border-bottom:1px solid #e5e7eb;">Ticker</th>
+      <th align="left" style="border-bottom:1px solid #e5e7eb;">Company</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Last</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Δ today</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Mkt cap $bn</th>
+    </tr></thead>
+    <tbody>
+    {% for e in macro.equities %}
+    <tr>
+      <td style="border-bottom:1px solid #e5e7eb;"><strong>{{ e.ticker }}</strong></td>
+      <td style="border-bottom:1px solid #e5e7eb;">{{ e.company }}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{% if e.last is none %}—{% else %}{{ "%.2f"|format(e.last) }}{% endif %}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb; color:{% if e.delta_today_pct and e.delta_today_pct > 0 %}#15803d{% elif e.delta_today_pct and e.delta_today_pct < 0 %}#b91c1c{% else %}#6b7280{% endif %};">
+        {% if e.delta_today_pct is none %}—{% else %}{{ "%+.2f"|format(e.delta_today_pct) }}%{% endif %}
+      </td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{% if e.mcap_bn is none %}—{% else %}{{ "%.1f"|format(e.mcap_bn) }}{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <!-- 30d delta column removed (not on Markit Digital /header endpoint) -->
+</td></tr>
+
+<!-- Footer -->
+<tr><td style="padding:20px 24px; border-top:1px solid #e5e7eb; color:#6b7280; font-size:11px;">
+  Sources: AEMO NEMWeb (GBB, STTM, DWGM, GSH, DispatchIS, Next_Day_Dispatch, ROOFTOP_PV, MIBB), AEMO NEM Registration List, AEMO WA GBB, ASX Energy public futures dataset, ACCC LNG Netback Series, asx.com.au backend (Markit Digital), RBA, FRED.<br>
+  Generated by markets-brief. Personal/internal use only — please do not redistribute.
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>
