@@ -17,7 +17,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from app import cache
 from app.config import REFRESH_INTERVAL_MINUTES
-from app.sources import accc, asx_futures, demand_forecast, dwgm, equities, gbb, genmix, gsh, interconnectors, macro, nem, sttm, storage, wagbb
+from app.sources import accc, asx_futures, demand_forecast, dwgm, equities, gbb, genmix, gsh, interconnectors, macro, nem, sttm, storage, wagbb, weather
 
 
 log = logging.getLogger(__name__)
@@ -48,6 +48,7 @@ FAST_JOBS: list[tuple[str, Callable[[], dict], Callable[[dict], str]]] = [
     ("macro",    macro.fetch,    lambda r: r["as_of_gas_day"]),
     ("accc",     accc.fetch,     lambda r: r["as_of_gas_day"]),
     ("equities", equities.fetch, lambda r: r["as_of_gas_day"]),
+    ("weather",  weather.fetch,  lambda r: _today_iso()),
     ("storage",  storage.fetch,  lambda r: r["as_of_gas_day"]),
     ("demand",   demand_forecast.fetch, lambda r: r["as_of_gas_day"]),
     ("asx_futures", asx_futures.fetch, lambda r: _today_iso()),

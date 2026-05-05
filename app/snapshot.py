@@ -39,6 +39,139 @@ def _series_from_history(history: list[dict], list_key: str, label_field: str, l
     return out
 
 
+# --- Anomaly thresholds + tagging ---------------------------------------------
+
+# Cell- and row-level severity thresholds. Tuned to surface notable conditions
+# without colouring everything. Adjust in one place to retune the dashboard.
+PIPELINE_UTIL_WARN_PCT = 90
+PIPELINE_UTIL_CRIT_PCT = 98
+INTERCONNECTOR_UTIL_CRIT_PCT = 95   # any interconnector above this is binding
+RRP_WARN_AUD = 150
+RRP_CRIT_AUD = 300
+RRP_NEGATIVE_AUD = 0                # negative pricing = renewable curtailment / oversupply
+STORAGE_PCT_WARN = 30
+STORAGE_PCT_CRIT = 15
+STORAGE_DAYS_COVER_WARN = 14
+STORAGE_DAYS_COVER_CRIT = 7
+
+
+def _severity_from_util(util: float | None, warn: float, crit: float) -> str:
+    if util is None:
+        return "normal"
+    if util >= crit:
+        return "critical"
+    if util >= warn:
+        return "warning"
+    return "normal"
+
+
+def _tag_pipeline_severity(rows: list[dict]) -> None:
+    for r in rows:
+        r["severity"] = _severity_from_util(r.get("utilisation"), PIPELINE_UTIL_WARN_PCT, PIPELINE_UTIL_CRIT_PCT)
+
+
+def _tag_elec_severity(rows: list[dict]) -> None:
+    for r in rows:
+        rrp = r.get("rrp")
+        if rrp is None:
+            r["severity"] = "normal"
+        elif rrp >= RRP_CRIT_AUD:
+            r["severity"] = "critical"
+        elif rrp >= RRP_WARN_AUD or rrp < RRP_NEGATIVE_AUD:
+            # Negative RRP shares the warning tone (notable, not necessarily bad).
+            r["severity"] = "warning"
+        else:
+            r["severity"] = "normal"
+
+
+def _tag_interconnector_severity(rows: list[dict]) -> None:
+    for r in rows:
+        r["severity"] = _severity_from_util(r.get("utilisation"), INTERCONNECTOR_UTIL_CRIT_PCT, INTERCONNECTOR_UTIL_CRIT_PCT)
+
+
+def _tag_storage_severity(rows: list[dict]) -> None:
+    for r in rows:
+        pct = r.get("pct_full")
+        days = r.get("days_cover")
+        sev = "normal"
+        if pct is not None and pct < STORAGE_PCT_CRIT:
+            sev = "critical"
+        elif days is not None and days < STORAGE_DAYS_COVER_CRIT:
+            sev = "critical"
+        elif pct is not None and pct < STORAGE_PCT_WARN:
+            sev = "warning"
+        elif days is not None and days < STORAGE_DAYS_COVER_WARN:
+            sev = "warning"
+        r["severity"] = sev
+
+
+def _compute_notable(pipelines: list[dict], elec_prices: list[dict], interconnectors_rows: list[dict], storage_rows: list[dict]) -> list[dict]:
+    """Build the "Today's notable" bullet list from already-tagged rows.
+
+    Returns 0–6 items, sorted critical-first."""
+    items: list[dict] = []
+
+    for p in pipelines:
+        if p.get("severity") in ("critical", "warning") and p.get("utilisation") is not None:
+            label = "binding" if p["severity"] == "critical" else "high utilisation"
+            items.append({
+                "text": f"{p['display']} — {p['utilisation']:.0f}% {label}",
+                "severity": p["severity"],
+                "tab": "tab-gas",
+            })
+
+    for e in elec_prices:
+        if e.get("rrp") is None:
+            continue
+        if e.get("severity") == "critical":
+            items.append({
+                "text": f"{e['region']} dispatch RRP ${e['rrp']:.0f}/MWh — high",
+                "severity": "critical",
+                "tab": "tab-electricity",
+            })
+        elif e.get("rrp") < RRP_NEGATIVE_AUD:
+            items.append({
+                "text": f"{e['region']} dispatch negative — ${e['rrp']:.2f}/MWh (renewables curtailment / oversupply)",
+                "severity": "warning",
+                "tab": "tab-electricity",
+            })
+        elif e.get("severity") == "warning":
+            items.append({
+                "text": f"{e['region']} dispatch RRP ${e['rrp']:.0f}/MWh — elevated",
+                "severity": "warning",
+                "tab": "tab-electricity",
+            })
+
+    for r in interconnectors_rows:
+        if r.get("severity") == "critical":
+            items.append({
+                "text": f"{r['display']} binding: {r['direction_text']} at {r['utilisation']:.0f}%",
+                "severity": "critical",
+                "tab": "tab-electricity",
+            })
+
+    for s in storage_rows:
+        if s.get("severity") == "critical":
+            label = "low" if s.get("pct_full") is not None and s["pct_full"] < STORAGE_PCT_CRIT else "stress-day cover"
+            pct = s.get("pct_full")
+            items.append({
+                "text": f"{s['facility']}: {pct:.0f}% full — {label}" if pct is not None else f"{s['facility']}: stress-day cover",
+                "severity": "critical",
+                "tab": "tab-gas",
+            })
+        elif s.get("severity") == "warning":
+            pct = s.get("pct_full")
+            if pct is not None:
+                items.append({
+                    "text": f"{s['facility']}: {pct:.0f}% full",
+                    "severity": "warning",
+                    "tab": "tab-gas",
+                })
+
+    # Sort: critical first, then warnings; cap at 6 items so the box stays scannable.
+    return sorted(items, key=lambda x: 0 if x["severity"] == "critical" else 1)[:6]
+
+
 # --- Per-source cache reads ---------------------------------------------------
 
 def _empty_pipelines() -> list[dict]:
@@ -63,9 +196,13 @@ def _empty_pipelines() -> list[dict]:
 def _read_pipelines() -> tuple[list[dict], str | None]:
     entry = cache.get_latest("gbb")
     if not entry:
-        return _empty_pipelines(), None
+        rows = _empty_pipelines()
+        _tag_pipeline_severity(rows)
+        return rows, None
     payload = entry["payload"]
-    return payload.get("pipelines", _empty_pipelines()), payload.get("as_of_gas_day")
+    rows = payload.get("pipelines", _empty_pipelines())
+    _tag_pipeline_severity(rows)
+    return rows, payload.get("as_of_gas_day")
 
 
 def _read_gas_prices() -> list[dict]:
@@ -107,6 +244,7 @@ def _read_elec_prices() -> list[dict]:
                 rows.append({**current, "avg7": avg7, "sparkline_values": values})
                 continue
         rows.append({"region": region, "rrp": None, "avg7": avg7, "stale": True, "sparkline_values": values})
+    _tag_elec_severity(rows)
     return rows
 
 
@@ -114,6 +252,15 @@ def _read_interconnectors() -> dict:
     entry = cache.get_latest("interconnectors")
     if not entry:
         return {"rows": [], "as_of": None}
+    payload = entry["payload"]
+    _tag_interconnector_severity(payload.get("rows", []))
+    return payload
+
+
+def _read_weather() -> dict:
+    entry = cache.get_latest("weather")
+    if not entry:
+        return {"rows": []}
     return entry["payload"]
 
 
@@ -167,6 +314,7 @@ def _read_storage() -> dict:
     demand_entry = cache.get_latest("demand")
     gas_storage = storage_entry["payload"]["rows"] if storage_entry else _empty_storage_rows()
     demand_cards = demand_entry["payload"]["cards"] if demand_entry else _empty_demand_cards()
+    _tag_storage_severity(gas_storage)
     return {"gas_storage": gas_storage, "demand": demand_cards}
 
 
@@ -329,6 +477,14 @@ def build_snapshot() -> dict:
         else genmix_gas_day
     )
     wa = _read_wa()
+    storage_section = _read_storage()
+    interconnectors_section = _read_interconnectors()
+    notable = _compute_notable(
+        pipelines=pipelines,
+        elec_prices=elec_prices,
+        interconnectors_rows=interconnectors_section.get("rows", []),
+        storage_rows=storage_section.get("gas_storage", []),
+    )
 
     status = cache.status()
     sources_present = sorted(status.keys())
@@ -354,15 +510,17 @@ def build_snapshot() -> dict:
         "as_of_str": now.strftime("%A, %d %B %Y, %H:%M %Z"),
         "title_date": now.strftime("%A, %d %B %Y"),
         "next_refresh_min": REFRESH_INTERVAL_MINUTES,
+        "notable": notable,
+        "weather": _read_weather(),
         "pipelines": pipelines,
         "gas_prices": gas_prices,
         "elec_prices": elec_prices,
         "nem_regions": NEM_REGIONS,
-        "interconnectors": _read_interconnectors(),
+        "interconnectors": interconnectors_section,
         "genmix": genmix_rows,
         "genmix_gas_day": genmix_gas_day_iso,
         "wa": wa,
-        "storage": _read_storage(),
+        "storage": storage_section,
         "forwards": _read_forwards(),
         "netback": _read_netback(),
         "macro": _read_macro(),

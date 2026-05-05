@@ -25,6 +25,48 @@
 </td></tr>
 {% endif %}
 
+<!-- Today's notable -->
+{% if notable %}
+<tr><td style="padding:18px 24px 6px;">
+  <h2 style="margin:0 0 8px; color:#1F3864; font-size:13px; text-transform:uppercase; letter-spacing:0.05em;">Today's notable</h2>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+    {% for item in notable %}
+    <tr><td style="padding:6px 0; border-left:3px solid {% if item.severity == 'critical' %}#b91c1c{% else %}#ca8a04{% endif %}; padding-left:12px; font-size:13px;">
+      <strong style="color:{% if item.severity == 'critical' %}#b91c1c{% else %}#ca8a04{% endif %}; text-transform:uppercase; font-size:11px; letter-spacing:0.04em;">
+        {{ item.severity }}
+      </strong>
+      &nbsp; {{ item.text }}
+    </td></tr>
+    {% endfor %}
+  </table>
+</td></tr>
+{% endif %}
+
+<!-- Weather -->
+{% if weather and weather.rows %}
+<tr><td style="padding:18px 24px 6px;">
+  <h2 style="margin:0 0 8px; color:#1F3864; font-size:13px; text-transform:uppercase; letter-spacing:0.05em;">Capital-city temperatures</h2>
+  <table role="presentation" width="100%" cellpadding="6" cellspacing="0" border="0" style="border-collapse:collapse; font-size:13px;">
+    <thead><tr style="background:#f8f9fb; color:#6b7280; text-transform:uppercase; font-size:11px;">
+      <th align="left" style="border-bottom:1px solid #e5e7eb;">City</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Now</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Today max</th>
+      <th align="right" style="border-bottom:1px solid #e5e7eb;">Tomorrow min/max</th>
+    </tr></thead>
+    <tbody>
+    {% for w in weather.rows %}
+    <tr>
+      <td style="border-bottom:1px solid #e5e7eb;">{{ w.name }} <span style="color:#6b7280; font-size:11px;">{{ w.region }}</span></td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{% if w.current_c is none %}—{% else %}{{ "%.1f"|format(w.current_c) }}°C{% endif %}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{% if w.today_max_c is none %}—{% else %}{{ "%.0f"|format(w.today_max_c) }}°C{% endif %}</td>
+      <td align="right" style="border-bottom:1px solid #e5e7eb;">{% if w.tomorrow_max_c is none %}—{% else %}{{ "%.0f"|format(w.tomorrow_min_c) }} / {{ "%.0f"|format(w.tomorrow_max_c) }}°C{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</td></tr>
+{% endif %}
+
 <!-- East coast gas pipelines -->
 <tr><td style="padding:18px 24px 6px;">
   <h2 style="margin:0 0 8px; color:#1F3864; font-size:13px; text-transform:uppercase; letter-spacing:0.05em;">East coast gas — pipeline flows (nominations)</h2>

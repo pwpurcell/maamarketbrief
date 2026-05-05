@@ -25,6 +25,19 @@
     <div class="banner">{{ phase_banner }}</div>
     {% endif %}
 
+    {% if notable %}
+    <section class="notable-box">
+        <h3>Today's notable</h3>
+        <ul>
+        {% for item in notable %}
+            <li class="notable-item notable-{{ item.severity }}">
+                <a href="#{{ item.tab }}">{{ item.text }}</a>
+            </li>
+        {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+
     <nav class="tabs" role="tablist">
         <a class="tab" href="#tab-gas">Gas</a>
         <a class="tab" href="#tab-electricity">Electricity</a>
@@ -36,6 +49,24 @@
     <!-- GAS TAB                                                      -->
     <!-- ============================================================ -->
     <div id="tab-gas" class="tab-pane">
+
+    {% if weather and weather.rows %}
+    <section>
+        <h2>Capital-city temperatures <span class="muted" style="font-size:12px; text-transform:none; letter-spacing:0">— Open-Meteo / BOM. Drives gas (winter heating) + electricity (summer cooling) demand.</span></h2>
+        <div class="grid-cards">
+            {% for w in weather.rows %}
+            <div class="card{% if w.stale %} stale{% endif %}">
+                <div class="card-label">{{ w.name }} <span class="muted" style="font-weight:normal">{{ w.region }}</span></div>
+                <div class="card-value">{% if w.current_c is none %}—{% else %}{{ "%.1f"|format(w.current_c) }}°C{% endif %}</div>
+                <div class="card-sub">
+                    {% if w.today_max_c is not none %}Today max {{ "%.0f"|format(w.today_max_c) }}°C{% endif %}
+                    {% if w.tomorrow_max_c is not none %} · Tom {{ "%.0f"|format(w.tomorrow_min_c) }}/{{ "%.0f"|format(w.tomorrow_max_c) }}°C{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
 
     <section>
         <h2>East coast gas — pipeline flows (nominations)</h2>
@@ -52,7 +83,7 @@
             </thead>
             <tbody>
                 {% for p in pipelines %}
-                <tr{% if p.stale %} class="stale"{% endif %}>
+                <tr class="{% if p.stale %}stale {% endif %}severity-{{ p.severity or 'normal' }}">
                     <td>{{ p.display }}</td>
                     <td class="num">{% if p.flow is none %}—{% else %}{{ "%.1f"|format(p.flow) }}{% endif %}</td>
                     <td class="num">{{ p.nameplate }}</td>
@@ -100,7 +131,7 @@
             </thead>
             <tbody>
                 {% for s in storage.gas_storage %}
-                <tr{% if s.stale %} class="stale"{% endif %}>
+                <tr class="{% if s.stale %}stale {% endif %}severity-{{ s.severity or 'normal' }}">
                     <td>{{ s.facility }}</td>
                     <td class="num">{% if s.inventory_pj is none %}—{% else %}{{ "%.1f"|format(s.inventory_pj) }}{% endif %}</td>
                     <td class="num">{% if s.capacity_pj is none %}—{% else %}{{ "%.1f"|format(s.capacity_pj) }}{% endif %}</td>
@@ -237,7 +268,7 @@
             </thead>
             <tbody>
                 {% for e in elec_prices %}
-                <tr{% if e.stale %} class="stale"{% endif %}>
+                <tr class="{% if e.stale %}stale {% endif %}severity-{{ e.severity or 'normal' }}">
                     <td>{{ e.region }}</td>
                     <td class="num">{% if e.rrp is none %}—{% else %}${{ "%.2f"|format(e.rrp) }}{% endif %}</td>
                     <td class="num">{% if e.avg7 is none %}—{% else %}${{ "%.2f"|format(e.avg7) }}{% endif %}</td>
@@ -262,7 +293,7 @@
             </thead>
             <tbody>
                 {% for r in interconnectors.rows %}
-                <tr>
+                <tr class="severity-{{ r.severity or 'normal' }}">
                     <td>{{ r.display }} <span class="muted" style="font-size:11px">{{ r.kind }}</span></td>
                     <td class="delta delta-{{ r.arrow_class }}">{{ r.arrow }} {{ r.direction_text }}</td>
                     <td class="num">{{ "{:.0f}".format(r.mw_flow) }}</td>
@@ -475,6 +506,55 @@ function highlightActiveTab() {
 }
 window.addEventListener('hashchange', highlightActiveTab);
 window.addEventListener('DOMContentLoaded', highlightActiveTab);
+
+// Sortable tables. Click a column header to sort by that column. Direction
+// toggles on repeat clicks. Numeric vs text detected by the first cell value;
+// $/%/comma stripping handled inline. Sparkline cells (containing inline SVG)
+// are skipped automatically — their textContent is empty.
+function makeSortable() {
+    document.querySelectorAll('table.data').forEach(function (table) {
+        var thead = table.querySelector('thead');
+        if (!thead) return;
+        var headers = thead.querySelectorAll('th');
+        headers.forEach(function (th, idx) {
+            th.style.cursor = 'pointer';
+            th.title = 'Click to sort';
+            th.addEventListener('click', function () {
+                var tbody = table.querySelector('tbody');
+                if (!tbody) return;
+                var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+                if (rows.length < 2) return;
+
+                var sortIdx = parseInt(table.dataset.sortIdx, 10);
+                var sortDir = table.dataset.sortDir || 'asc';
+                var dir = (sortIdx === idx && sortDir === 'asc') ? 'desc' : 'asc';
+
+                var sample = rows[0].cells[idx] ? rows[0].cells[idx].textContent.trim() : '';
+                var isNumeric = /^-?[$+]?[\d,.]+%?$/.test(sample.replace(/\s/g, '').replace(/[↑↓→]/g, ''));
+
+                rows.sort(function (a, b) {
+                    var av = (a.cells[idx] ? a.cells[idx].textContent : '').trim();
+                    var bv = (b.cells[idx] ? b.cells[idx].textContent : '').trim();
+                    if (isNumeric) {
+                        var ax = parseFloat(av.replace(/[$,%+↑↓→\s]/g, '')) || 0;
+                        var bx = parseFloat(bv.replace(/[$,%+↑↓→\s]/g, '')) || 0;
+                        return dir === 'asc' ? ax - bx : bx - ax;
+                    }
+                    return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+                });
+                rows.forEach(function (r) { tbody.appendChild(r); });
+
+                table.dataset.sortIdx = idx;
+                table.dataset.sortDir = dir;
+                headers.forEach(function (h, hi) {
+                    h.classList.remove('sort-asc', 'sort-desc');
+                    if (hi === idx) h.classList.add(dir === 'asc' ? 'sort-asc' : 'sort-desc');
+                });
+            });
+        });
+    });
+}
+window.addEventListener('DOMContentLoaded', makeSortable);
 </script>
 </body>
 </html>

@@ -127,13 +127,20 @@ html, body {
 /* Tab navigation -------------------------------------------------------------
    Pure-CSS tabs using :target. Tab panes hide by default; the one whose id
    matches the URL fragment shows. When no fragment is set (initial page load),
-   the :has() rule in the body selector falls back to the first tab. */
+   the :has() rule in the body selector falls back to the first tab.
+   Sticky on scroll so the tab bar stays reachable on long pages. */
 .tabs {
     display: flex;
     flex-wrap: wrap;
     gap: 0;
     border-bottom: 2px solid var(--line);
     margin: 20px 0 18px;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 10;
+    /* Faint shadow when scrolled so the bar visually separates from the content. */
+    box-shadow: 0 1px 0 var(--line);
 }
 .tab {
     padding: 10px 18px;
@@ -281,8 +288,71 @@ table.data tr:last-child td { border-bottom: none; }
 table.data .num { text-align: right; font-variant-numeric: tabular-nums; }
 table.data .muted, .muted { color: var(--muted); }
 
+/* Sort indicator on column headers (added by JS on click). */
+table.data th { user-select: none; position: relative; }
+table.data th:hover { color: var(--accent); }
+table.data th.sort-asc::after,
+table.data th.sort-desc::after {
+    content: " ▲";
+    color: var(--accent);
+    font-size: 9px;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+table.data th.sort-desc::after { content: " ▼"; }
+
+/* Mobile-friendly: any .data table inside a section gets horizontal scroll
+   when it overflows on narrow screens. Wrapping the table in a div would be
+   tidier but this works without template changes. */
+section { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
 tr.stale td { color: var(--stale); }
 tr.stale td::after { }
+
+/* Anomaly severity row backgrounds — quiet enough not to overwhelm but
+   the eye lands on them when scanning. */
+tr.severity-critical td { background: #fef2f2; }
+tr.severity-warning td  { background: #fffbeb; }
+tr.severity-normal td   { /* default */ }
+tr.severity-critical:hover td { background: #fee2e2; }
+tr.severity-warning:hover td  { background: #fef3c7; }
+
+/* "Today's notable" box that sits between banner and tabs. */
+.notable-box {
+    margin: 14px 0 6px;
+    padding: 14px 18px;
+    background: #fefce8;
+    border: 1px solid #fde68a;
+    border-radius: 6px;
+}
+.notable-box h3 {
+    margin: 0 0 8px;
+    color: #92400e;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+}
+.notable-box ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.notable-item {
+    padding: 4px 0 4px 12px;
+    border-left: 3px solid transparent;
+    font-size: 13px;
+    margin: 2px 0;
+}
+.notable-item a {
+    color: var(--ink);
+    text-decoration: none;
+}
+.notable-item a:hover { text-decoration: underline; }
+.notable-critical { border-left-color: #b91c1c; }
+.notable-warning  { border-left-color: #ca8a04; }
+.notable-critical a { color: #991b1b; font-weight: 600; }
+.notable-warning a  { color: #854d0e; }
 
 .delta { font-variant-numeric: tabular-nums; }
 .delta-up   { color: var(--up); }
@@ -347,11 +417,17 @@ footer {
 }
 
 @media (max-width: 700px) {
-    .page { padding: 16px 12px 32px; }
-    .topbar { flex-direction: column; align-items: flex-start; }
-    .topbar-meta { align-items: flex-start; text-align: left; }
-    table.data { font-size: 13px; }
+    .page { padding: 12px 12px 32px; }
+    table.data { font-size: 13px; min-width: 100%; }
     table.data th, table.data td { padding: 6px 8px; }
     .grid-cards { grid-template-columns: 1fr 1fr; }
     .grid-cards--two { grid-template-columns: 1fr; }
+    /* Bigger tab touch targets, scroll horizontally if too many */
+    .tabs { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+    .tab { padding: 12px 14px; font-size: 12px; flex-shrink: 0; }
+    /* Stop the section overflow-x clipping the sticky tabs */
+    section { overflow-x: visible; }
+    /* Each table in its own scroll container on small screens */
+    section table.data { display: block; overflow-x: auto; white-space: nowrap; }
+    section table.data thead, section table.data tbody { white-space: normal; }
 }
