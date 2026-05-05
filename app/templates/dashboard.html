@@ -25,6 +25,18 @@
     <div class="banner">{{ phase_banner }}</div>
     {% endif %}
 
+    <nav class="tabs" role="tablist">
+        <a class="tab" href="#tab-gas">Gas</a>
+        <a class="tab" href="#tab-electricity">Electricity</a>
+        <a class="tab" href="#tab-forwards">Forwards</a>
+        <a class="tab" href="#tab-macro">Macro</a>
+    </nav>
+
+    <!-- ============================================================ -->
+    <!-- GAS TAB                                                      -->
+    <!-- ============================================================ -->
+    <div id="tab-gas" class="tab-pane">
+
     <section>
         <h2>East coast gas — pipeline flows (nominations)</h2>
         <table class="data">
@@ -69,6 +81,148 @@
             {% endfor %}
         </div>
     </section>
+
+    <section>
+        <h2>Storage and balance</h2>
+
+        <h3 class="subhead">Gas storage <span class="muted" style="font-size:11px; text-transform:none; letter-spacing:0">— source: AEMO GBB ActualFlowStorage (settled, ~1-2 day lag)</span></h3>
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Facility</th>
+                    <th class="num">Inventory (PJ)</th>
+                    <th class="num">Working capacity</th>
+                    <th class="num">% full</th>
+                    <th class="num">Net flow (TJ/d)</th>
+                    <th class="num">Days of cover</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in storage.gas_storage %}
+                <tr{% if s.stale %} class="stale"{% endif %}>
+                    <td>{{ s.facility }}</td>
+                    <td class="num">{% if s.inventory_pj is none %}—{% else %}{{ "%.1f"|format(s.inventory_pj) }}{% endif %}</td>
+                    <td class="num">{% if s.capacity_pj is none %}—{% else %}{{ "%.1f"|format(s.capacity_pj) }}{% endif %}</td>
+                    <td class="num">{% if s.pct_full is none %}—{% else %}{{ "%.1f"|format(s.pct_full) }}%{% endif %}</td>
+                    <td class="num delta delta-{{ s.net_flow_class }}">
+                        {% if s.net_flow_tjd is none %}—{% else %}{{ s.net_flow_arrow }} {{ "%+.1f"|format(s.net_flow_tjd) }}{% endif %}
+                    </td>
+                    <td class="num">{% if s.days_cover is none %}—{% else %}{{ "%.1f"|format(s.days_cover) }}{% endif %}</td>
+                    <td class="muted">{{ s.region }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p class="footnote">Net flow positive = injection, negative = withdrawal. Days of cover = <strong>(inventory − cushion gas) ÷ max withdrawal rate</strong> at operator nameplate peak — the planning-relevant figure for stress events, not current flow. Cushion gas is the minimum physically immobile inventory below which withdrawal stops; Iona's ~6 PJ floor is per the 2023 GSOO (so working gas at full = 18.5 PJ, not 24.5). Other facilities aren't published in the same detail; their cushion is treated as 0 (working = full inventory) until firmer data arrives.</p>
+
+        <h3 class="subhead">Demand forecast <span class="muted" style="font-size:11px; text-transform:none; letter-spacing:0">— actual-vs-forecast comparison pending (DWGM int310 / STTM int657)</span></h3>
+        <div class="grid-cards grid-cards--two">
+            {% for d in storage.demand %}
+            <div class="card{% if d.stale %} stale{% endif %}">
+                <div class="card-label">{{ d.market }}</div>
+                <div class="card-value">
+                    {% if d.forecast is none %}—{% else %}{{ "{:,}".format(d.forecast) }} {{ d.unit }}{% endif %}
+                </div>
+                <div class="card-sub">
+                    {% if d.actual is not none %}Actual {{ "{:,}".format(d.actual) }} {{ d.unit }}{% else %}Actual: not yet published{% endif %}
+                </div>
+                <div class="card-sub" style="margin-top:4px">{{ d.context or "" }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section>
+        <h2>Western Australia gas{% if wa.as_of_gas_day %} <span class="muted" style="font-size:12px; text-transform:none; letter-spacing:0">— gas day {{ wa.as_of_gas_day }}</span>{% endif %}</h2>
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Pipeline / facility</th>
+                    <th class="num">Flow / output (TJ/d)</th>
+                    <th class="num">Nameplate</th>
+                    <th class="num">Utilisation</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr{% if wa.stale %} class="stale"{% endif %}>
+                    <td><strong>Dampier to Bunbury (DBP)</strong></td>
+                    <td class="num">{% if wa.dbp_flow is none %}—{% else %}{{ "%.1f"|format(wa.dbp_flow) }}{% endif %}</td>
+                    <td class="num">{{ wa.dbp_nameplate }}</td>
+                    <td class="num">{% if wa.dbp_utilisation is none %}—{% else %}{{ "%.1f"|format(wa.dbp_utilisation) }}%{% endif %}</td>
+                </tr>
+                {% for f in wa.facilities %}
+                <tr{% if f.stale %} class="stale"{% endif %}>
+                    <td>{{ f.name }}</td>
+                    <td class="num">{{ "%.1f"|format(f.output_tjd) }}</td>
+                    <td class="num muted">—</td>
+                    <td class="num muted">—</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p class="footnote">WA GBB API publishes settled actuals; the data above lags by ~2 days. Indicative WA domgas reference price not yet wired.</p>
+    </section>
+
+    <section>
+        <h2>LNG netback and export parity</h2>
+
+        <h3 class="subhead">Global reference prices</h3>
+        <div class="grid-cards">
+            {% for g in netback.global_lng %}
+            <div class="card{% if g.stale %} stale{% endif %}">
+                <div class="card-label">{{ g.series }}</div>
+                <div class="card-value">
+                    {% if g.value_main is none %}—{% else %}{{ "%.2f"|format(g.value_main) }}{% endif %}
+                    <span class="card-unit">{{ g.unit_main }}</span>
+                </div>
+                {% if g.value_alt is not none %}
+                <div class="card-sub">≈ {{ "%.2f"|format(g.value_alt) }} {{ g.unit_alt }}</div>
+                {% else %}
+                <div class="card-sub">{{ g.context or "" }}</div>
+                {% endif %}
+                <div class="card-delta delta-{{ g.delta_class }}">
+                    {% if g.delta is not none %}{{ g.delta_arrow }} {{ "%+.2f"|format(g.delta) }}{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <h3 class="subhead">Netback comparison ($/GJ)</h3>
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Series</th>
+                    <th class="num">Current</th>
+                    <th class="num">7d avg</th>
+                    <th class="num">30d avg</th>
+                    <th class="num">Spread to STTM Sydney</th>
+                    <th class="num">Spread to Wallumbilla GSH</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for n in netback.netback %}
+                <tr{% if n.stale %} class="stale"{% endif %}>
+                    <td>{{ n.series }}</td>
+                    <td class="num">{% if n.current is none %}—{% else %}${{ "%.2f"|format(n.current) }}{% endif %}</td>
+                    <td class="num">{% if n.avg7 is none %}—{% else %}${{ "%.2f"|format(n.avg7) }}{% endif %}</td>
+                    <td class="num">{% if n.avg30 is none %}—{% else %}${{ "%.2f"|format(n.avg30) }}{% endif %}</td>
+                    <td class="num">{% if n.spread_sttm_syd is none %}—{% else %}{{ "%+.2f"|format(n.spread_sttm_syd) }}{% endif %}</td>
+                    <td class="num">{% if n.spread_wallum is none %}—{% else %}{{ "%+.2f"|format(n.spread_wallum) }}{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p class="footnote">{{ netback.footnote }}</p>
+    </section>
+
+    </div><!-- /tab-gas -->
+
+
+    <!-- ============================================================ -->
+    <!-- ELECTRICITY TAB                                              -->
+    <!-- ============================================================ -->
+    <div id="tab-electricity" class="tab-pane">
 
     <section>
         <h2>NEM electricity — dispatch RRP ($/MWh)</h2>
@@ -164,91 +318,13 @@
         </table>
     </section>
 
-    <section>
-        <h2>Western Australia gas{% if wa.as_of_gas_day %} <span class="muted" style="font-size:12px; text-transform:none; letter-spacing:0">— gas day {{ wa.as_of_gas_day }}</span>{% endif %}</h2>
-        <table class="data">
-            <thead>
-                <tr>
-                    <th>Pipeline / facility</th>
-                    <th class="num">Flow / output (TJ/d)</th>
-                    <th class="num">Nameplate</th>
-                    <th class="num">Utilisation</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr{% if wa.stale %} class="stale"{% endif %}>
-                    <td><strong>Dampier to Bunbury (DBP)</strong></td>
-                    <td class="num">{% if wa.dbp_flow is none %}—{% else %}{{ "%.1f"|format(wa.dbp_flow) }}{% endif %}</td>
-                    <td class="num">{{ wa.dbp_nameplate }}</td>
-                    <td class="num">{% if wa.dbp_utilisation is none %}—{% else %}{{ "%.1f"|format(wa.dbp_utilisation) }}%{% endif %}</td>
-                </tr>
-                {% for f in wa.facilities %}
-                <tr{% if f.stale %} class="stale"{% endif %}>
-                    <td>{{ f.name }}</td>
-                    <td class="num">{{ "%.1f"|format(f.output_tjd) }}</td>
-                    <td class="num muted">—</td>
-                    <td class="num muted">—</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <p class="footnote">WA GBB API publishes settled actuals; the data above lags by ~2 days. Indicative WA domgas reference price not yet wired.</p>
-    </section>
+    </div><!-- /tab-electricity -->
 
-    {% if phase3_ui_banner %}
-    <div class="banner banner--info">{{ phase3_ui_banner }}</div>
-    {% endif %}
 
-    <section>
-        <h2>Storage and balance</h2>
-
-        <h3 class="subhead">Gas storage <span class="muted" style="font-size:11px; text-transform:none; letter-spacing:0">— source: AEMO GBB ActualFlowStorage (settled, ~1-2 day lag)</span></h3>
-        <table class="data">
-            <thead>
-                <tr>
-                    <th>Facility</th>
-                    <th class="num">Inventory (PJ)</th>
-                    <th class="num">Working capacity</th>
-                    <th class="num">% full</th>
-                    <th class="num">Net flow (TJ/d)</th>
-                    <th class="num">Days of cover</th>
-                    <th>Notes</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for s in storage.gas_storage %}
-                <tr{% if s.stale %} class="stale"{% endif %}>
-                    <td>{{ s.facility }}</td>
-                    <td class="num">{% if s.inventory_pj is none %}—{% else %}{{ "%.1f"|format(s.inventory_pj) }}{% endif %}</td>
-                    <td class="num">{% if s.capacity_pj is none %}—{% else %}{{ "%.1f"|format(s.capacity_pj) }}{% endif %}</td>
-                    <td class="num">{% if s.pct_full is none %}—{% else %}{{ "%.1f"|format(s.pct_full) }}%{% endif %}</td>
-                    <td class="num delta delta-{{ s.net_flow_class }}">
-                        {% if s.net_flow_tjd is none %}—{% else %}{{ s.net_flow_arrow }} {{ "%+.1f"|format(s.net_flow_tjd) }}{% endif %}
-                    </td>
-                    <td class="num">{% if s.days_cover is none %}—{% else %}{{ "%.1f"|format(s.days_cover) }}{% endif %}</td>
-                    <td class="muted">{{ s.region }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <p class="footnote">Net flow positive = injection, negative = withdrawal. Days of cover = <strong>(inventory − cushion gas) ÷ max withdrawal rate</strong> at operator nameplate peak — the planning-relevant figure for stress events, not current flow. Cushion gas is the minimum physically immobile inventory below which withdrawal stops; Iona's ~6 PJ floor is per the 2023 GSOO (so working gas at full = 18.5 PJ, not 24.5). Other facilities aren't published in the same detail; their cushion is treated as 0 (working = full inventory) until firmer data arrives.</p>
-
-        <h3 class="subhead">Demand forecast <span class="muted" style="font-size:11px; text-transform:none; letter-spacing:0">— actual-vs-forecast comparison pending (DWGM int310 / STTM int657)</span></h3>
-        <div class="grid-cards grid-cards--two">
-            {% for d in storage.demand %}
-            <div class="card{% if d.stale %} stale{% endif %}">
-                <div class="card-label">{{ d.market }}</div>
-                <div class="card-value">
-                    {% if d.forecast is none %}—{% else %}{{ "{:,}".format(d.forecast) }} {{ d.unit }}{% endif %}
-                </div>
-                <div class="card-sub">
-                    {% if d.actual is not none %}Actual {{ "{:,}".format(d.actual) }} {{ d.unit }}{% else %}Actual: not yet published{% endif %}
-                </div>
-                <div class="card-sub" style="margin-top:4px">{{ d.context or "" }}</div>
-            </div>
-            {% endfor %}
-        </div>
-    </section>
+    <!-- ============================================================ -->
+    <!-- FORWARDS TAB                                                 -->
+    <!-- ============================================================ -->
+    <div id="tab-forwards" class="tab-pane">
 
     <section>
         <h2>Forward curves <span class="muted" style="font-size:12px; text-transform:none; letter-spacing:0">— source: asxenergy.com.au public dataset (delayed ~20 min){% if forwards.as_of_time %}, {{ forwards.as_of_time }}{% endif %}</span></h2>
@@ -321,57 +397,13 @@
         {% endfor %}
     </section>
 
-    <section>
-        <h2>LNG netback and export parity</h2>
+    </div><!-- /tab-forwards -->
 
-        <h3 class="subhead">Global reference prices</h3>
-        <div class="grid-cards">
-            {% for g in netback.global_lng %}
-            <div class="card{% if g.stale %} stale{% endif %}">
-                <div class="card-label">{{ g.series }}</div>
-                <div class="card-value">
-                    {% if g.value_main is none %}—{% else %}{{ "%.2f"|format(g.value_main) }}{% endif %}
-                    <span class="card-unit">{{ g.unit_main }}</span>
-                </div>
-                {% if g.value_alt is not none %}
-                <div class="card-sub">≈ {{ "%.2f"|format(g.value_alt) }} {{ g.unit_alt }}</div>
-                {% else %}
-                <div class="card-sub">{{ g.context or "" }}</div>
-                {% endif %}
-                <div class="card-delta delta-{{ g.delta_class }}">
-                    {% if g.delta is not none %}{{ g.delta_arrow }} {{ "%+.2f"|format(g.delta) }}{% endif %}
-                </div>
-            </div>
-            {% endfor %}
-        </div>
 
-        <h3 class="subhead">Netback comparison ($/GJ)</h3>
-        <table class="data">
-            <thead>
-                <tr>
-                    <th>Series</th>
-                    <th class="num">Current</th>
-                    <th class="num">7d avg</th>
-                    <th class="num">30d avg</th>
-                    <th class="num">Spread to STTM Sydney</th>
-                    <th class="num">Spread to Wallumbilla GSH</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for n in netback.netback %}
-                <tr{% if n.stale %} class="stale"{% endif %}>
-                    <td>{{ n.series }}</td>
-                    <td class="num">{% if n.current is none %}—{% else %}${{ "%.2f"|format(n.current) }}{% endif %}</td>
-                    <td class="num">{% if n.avg7 is none %}—{% else %}${{ "%.2f"|format(n.avg7) }}{% endif %}</td>
-                    <td class="num">{% if n.avg30 is none %}—{% else %}${{ "%.2f"|format(n.avg30) }}{% endif %}</td>
-                    <td class="num">{% if n.spread_sttm_syd is none %}—{% else %}{{ "%+.2f"|format(n.spread_sttm_syd) }}{% endif %}</td>
-                    <td class="num">{% if n.spread_wallum is none %}—{% else %}{{ "%+.2f"|format(n.spread_wallum) }}{% endif %}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <p class="footnote">{{ netback.footnote }}</p>
-    </section>
+    <!-- ============================================================ -->
+    <!-- MACRO TAB                                                    -->
+    <!-- ============================================================ -->
+    <div id="tab-macro" class="tab-pane">
 
     <section>
         <h2>Macro context</h2>
@@ -417,15 +449,32 @@
         </table>
     </section>
 
+    </div><!-- /tab-macro -->
+
     <footer>
         <p class="muted">
-            Sources: AEMO NEMWeb (GBB, STTM, DWGM, GSH, DispatchIS, Next_Day_Dispatch, ROOFTOP_PV),
-            AEMO NEM Registration List, AEMO WA GBB, AEMO MIBB,
-            ASX 24, ACCC LNG Netback Series, ASX equity feed, RBA, AOFM.
+            Sources: AEMO NEMWeb (GBB, STTM, DWGM, GSH, DispatchIS, Next_Day_Dispatch, ROOFTOP_PV, MIBB),
+            AEMO NEM Registration List, AEMO WA GBB,
+            asxenergy.com.au public futures dataset, ACCC LNG Netback Series,
+            asx.com.au backend (Markit Digital), RBA, FRED.
         </p>
         <p class="muted">Next refresh in {{ next_refresh_min }} minutes.</p>
     </footer>
 
 </main>
+<script>
+// Highlight the active tab based on the URL fragment. Pure CSS handles the
+// show/hide via :target; this just toggles the `.active` class on the tab link.
+function highlightActiveTab() {
+    var hash = window.location.hash || '#tab-gas';
+    document.querySelectorAll('.tab').forEach(function (t) {
+        t.classList.toggle('active', t.getAttribute('href') === hash);
+    });
+    // Scroll to top so the user doesn't land mid-page after a tab click.
+    window.scrollTo(0, 0);
+}
+window.addEventListener('hashchange', highlightActiveTab);
+window.addEventListener('DOMContentLoaded', highlightActiveTab);
+</script>
 </body>
 </html>

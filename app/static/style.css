@@ -124,6 +124,51 @@ html, body {
     margin: 28px 0 0;
 }
 
+/* Tab navigation -------------------------------------------------------------
+   Pure-CSS tabs using :target. Tab panes hide by default; the one whose id
+   matches the URL fragment shows. When no fragment is set (initial page load),
+   the :has() rule in the body selector falls back to the first tab. */
+.tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    border-bottom: 2px solid var(--line);
+    margin: 20px 0 18px;
+}
+.tab {
+    padding: 10px 18px;
+    text-decoration: none;
+    color: var(--muted);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    transition: color 0.12s, border-color 0.12s;
+}
+.tab:hover {
+    color: var(--accent);
+}
+.tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+.tab-pane {
+    display: none;
+}
+.tab-pane:target {
+    display: block;
+}
+/* Default: show the first tab (Gas) when no fragment is set. */
+body:not(:has(.tab-pane:target)) #tab-gas {
+    display: block;
+}
+
+@media (max-width: 700px) {
+    .tab { padding: 8px 12px; font-size: 12px; }
+}
+
 section {
     margin: 28px 0;
 }
